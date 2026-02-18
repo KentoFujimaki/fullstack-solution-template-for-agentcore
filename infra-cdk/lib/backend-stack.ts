@@ -357,6 +357,12 @@ export class BackendStack extends cdk.NestedStack {
       parameterName: `/${config.stack_name_base}/runtime-arn`,
       stringValue: this.runtimeArn,
     })
+
+    new ssm.StringParameter(this, "AguiEndpointUrlParam", {
+      parameterName: `/${config.stack_name_base}/agui_endpoint_url`,
+      stringValue: "",
+      description: "Optional AG-UI endpoint URL for frontend builds",
+    })
   }
 
   private createCognitoSSMParameters(config: AppConfig): void {

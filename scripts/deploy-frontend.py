@@ -77,6 +77,7 @@ def run_command(
     capture_output: bool = True,
     check: bool = True,
     cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
 ) -> subprocess.CompletedProcess:
     """
     Execute a command securely via subprocess.
@@ -86,6 +87,7 @@ def run_command(
         capture_output: Whether to capture stdout/stderr
         check: Whether to raise on non-zero exit
         cwd: Working directory for the command
+        env: Environment variables for the command
 
     Returns:
         CompletedProcess instance with command results
@@ -98,6 +100,7 @@ def run_command(
         shell=False,
         timeout=300,
         cwd=cwd,
+        env=env,
     )
 
 
@@ -228,6 +231,34 @@ def get_stack_region(stack_name: str) -> str:
     if len(arn_parts) < 4:
         raise ValueError(f"Invalid stack ARN format: {stack_arn}")
     return arn_parts[3]
+
+
+def get_ssm_parameter(parameter_name: str) -> str:
+    """
+    Fetch an SSM parameter value via AWS CLI.
+
+    Args:
+        parameter_name: Full SSM parameter name
+
+    Returns:
+        Parameter value, or empty string if unset
+    """
+    result = run_command(
+        [
+            "aws",
+            "ssm",
+            "get-parameter",
+            "--name",
+            parameter_name,
+            "--query",
+            "Parameter.Value",
+            "--output",
+            "text",
+        ]
+    )
+
+    value = result.stdout.strip()
+    return "" if value == "None" else value
 
 
 def upload_to_s3(local_path: str, bucket: str, key: str) -> None:
@@ -482,6 +513,26 @@ def main() -> int:
     log_success(f"Staging Bucket: {deployment_bucket}")
     log_success(f"Region: {region}")
 
+    agui_endpoint_url = os.environ.get("AGUI_ENDPOINT_URL", "").strip()
+    if agui_endpoint_url:
+        log_success("Using AG-UI endpoint URL from AGUI_ENDPOINT_URL")
+    else:
+        parameter_name = f"/{stack_name}/agui_endpoint_url"
+        log_info(f"Resolving AG-UI endpoint URL from SSM: {parameter_name}")
+        try:
+            agui_endpoint_url = get_ssm_parameter(parameter_name).strip()
+            if agui_endpoint_url:
+                log_success("Using AG-UI endpoint URL from SSM")
+            else:
+                log_warning(
+                    "AG-UI endpoint URL is empty; using empty VITE_AGUI_ENDPOINT_URL"
+                )
+        except subprocess.CalledProcessError as e:
+            error_message = (e.stderr or "").strip()
+            log_warning(
+                f"Could not read {parameter_name} ({error_message}); using empty VITE_AGUI_ENDPOINT_URL"
+            )
+
     # Get agent pattern from config
     config = parse_config_yaml(config_path)
     pattern = config.get("pattern", "strands-single-agent")
@@ -519,8 +570,10 @@ def main() -> int:
 
     # Build frontend
     log_info("Building React app...")
+    build_env = os.environ.copy()
+    build_env["VITE_AGUI_ENDPOINT_URL"] = agui_endpoint_url
     try:
-        run_command(["npm", "run", "build"], capture_output=False)
+        run_command(["npm", "run", "build"], capture_output=False, env=build_env)
         log_success("Build completed")
     except subprocess.CalledProcessError:
         log_error("Build failed")

@@ -21,9 +21,16 @@ export class FastMainStack extends cdk.Stack {
       "Fullstack AgentCore Solution Template - Main Stack (v0.3.1) (uksb-v6dos0t5g8)"
     super(scope, id, { ...props, description })
 
+    const aguiEndpointUrl = new cdk.CfnParameter(this, "AguiEndpointUrl", {
+      type: "String",
+      default: "",
+      description: "Optional AG-UI endpoint URL passed to the frontend build",
+    })
+
     // Step 1: Create the Amplify stack to get the predictable domain
     this.amplifyHostingStack = new AmplifyHostingStack(this, `${id}-amplify`, {
       config: props.config,
+      aguiEndpointUrl: aguiEndpointUrl.valueAsString,
     })
 
     this.cognitoStack = new CognitoStack(this, `${id}-cognito`, {
@@ -91,6 +98,11 @@ export class FastMainStack extends cdk.Stack {
     new cdk.CfnOutput(this, "AmplifyUrl", {
       value: this.amplifyHostingStack.amplifyUrl,
       description: "Amplify Frontend URL (available after deployment)",
+    })
+
+    new cdk.CfnOutput(this, "AguiEndpointUrl", {
+      value: aguiEndpointUrl.valueAsString,
+      description: "AG-UI endpoint URL passed to Amplify frontend environment",
     })
 
     new cdk.CfnOutput(this, "StagingBucketName", {

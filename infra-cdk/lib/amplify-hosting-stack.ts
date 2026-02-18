@@ -7,6 +7,7 @@ import { AppConfig } from "./utils/config-manager"
 
 export interface AmplifyStackProps extends cdk.NestedStackProps {
   config: AppConfig
+  aguiEndpointUrl?: string
 }
 
 export class AmplifyHostingStack extends cdk.NestedStack {
@@ -86,6 +87,9 @@ export class AmplifyHostingStack extends cdk.NestedStack {
       appName: `${props.config.stack_name_base}-frontend`,
       description: `${props.config.stack_name_base} - React Frontend`,
       platform: amplify.Platform.WEB,
+      environmentVariables: {
+        VITE_AGUI_ENDPOINT_URL: props.aguiEndpointUrl ?? "",
+      },
     })
 
     // Create main branch for the Amplify app
